@@ -1,7 +1,7 @@
 """Offline integration smoke test: fixture HTML -> ingest -> article chunks -> KG.
 
-Never contacts PIS, Gemini or other external APIs. Output contains only
-counts and article-level citation metadata, never law text or downloaded HTML.
+Never contacts PIS, Gemini or other external APIs. An optional fixture-only
+bundle contains generated chunks and graph for an artifact restore test.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from lexsr import index, ingest, kg, pis
+from ci_artifact import export_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "zakon_o_radu_consolidated.html"
@@ -26,7 +27,7 @@ def deny_network(*_args: object, **_kwargs: object) -> None:
     raise AssertionError("Network access is forbidden in offline ingest smoke test")
 
 
-def run_offline(corpus_dir: Path, kg_path: Path) -> dict:
+def run_offline(corpus_dir: Path, kg_path: Path, bundle_dir: Path | None = None) -> dict:
     html = FIXTURE.read_text(encoding="utf-8")
     version = pis.LawVersion(
         uuid="offline-fixture-version",
@@ -93,6 +94,9 @@ def run_offline(corpus_dir: Path, kg_path: Path) -> dict:
             ):
                 raise AssertionError(f"Missing article provenance: {chunk['chunk_id']}")
 
+        if bundle_dir is not None:
+            export_bundle(corpus_dir, kg_path, bundle_dir, kind="fixture")
+
         return {
             "mode": "offline-fixture",
             "source_fixture": str(FIXTURE.relative_to(ROOT)),
@@ -120,11 +124,12 @@ def run_offline(corpus_dir: Path, kg_path: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--bundle-dir", type=Path, default=None)
     args = parser.parse_args()
     args.report.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="lexsr-offline-smoke-") as tmp:
         root = Path(tmp)
-        report = run_offline(root / "corpus", root / "kg.sqlite")
+        report = run_offline(root / "corpus", root / "kg.sqlite", args.bundle_dir)
 
     args.report.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
