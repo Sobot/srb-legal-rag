@@ -34,9 +34,26 @@ uv run --no-sync python scripts/ci_ingest_smoke.py --report /tmp/ingest-report.j
 Expected: `acts=1`, `article_chunks>0`, `graph_article_nodes=article_chunks`,
 `pis_requests=0`, `reference_expansion=false`, `embedding=false`.
 
-## Next step (not yet implemented)
+## Live one-act test (completed)
 
-After checking these results, a separate, explicitly approved workflow could
-fetch a single live act. PIS terms restrict automated extraction/storage, so
-review access permissions first. Do not add a full ingest or automated schedule
-until that question is resolved.
+A separate one-time [live workflow](../.github/workflows/live-one-act-smoke.yml)
+uses [the bounded runner](../scripts/ci_live_one_act_smoke.py). It fetches
+**only the current Constitution of Serbia** (`ustav-rs`, CURRENT_ONLY)
+through at most four allowlisted PIS GET endpoints. The 3-second client
+throttle stays enabled. No references, previous versions, embeddings or
+entire registry are fetched. The HTML/chunks/SQLite KG stay in temporary
+runner storage and are removed; only metadata and citation identifiers
+appear in the report.
+
+**Observed first run:** [GitHub Actions #41446116665](https://github.com/Sobot/srb-legal-rag/actions/runs/41446116665)
+completed successfully: 1 act, 1 version, 206 article chunks,
+206 KG article nodes, 4 PIS GET requests, 0 reference edges,
+0 embedding requests, 0 failures. The report contains the source ELI URL.
+
+Manual future runs require `confirm_live=true`. No schedule or broad
+ingestion option exists in this workflow.
+
+**Important:** this technical success is not permission from JP Službeni
+glasnik. Their published terms restrict automated access and storage.
+Seek written authorization before continuing to larger-scale ingestion
+or redistribution.
