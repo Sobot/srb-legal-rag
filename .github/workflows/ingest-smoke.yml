@@ -1,6 +1,7 @@
 name: Offline ingest and parsing smoke test
 
-# Never runs the live PIS crawler. All input comes from checked-in test fixtures.
+# No PIS requests. Artifact contains only law text derived from the ALREADY PUBLIC
+# checked-in HTML fixture; NEVER use this workflow with live PIS data.
 on:
   workflow_dispatch:
   push:
@@ -9,6 +10,7 @@ on:
     paths:
       - '.github/workflows/ingest-smoke.yml'
       - 'scripts/ci_ingest_smoke.py'
+      - 'scripts/ci_artifact.py'
       - 'src/**'
       - 'tests/**'
       - 'pyproject.toml'
@@ -43,7 +45,7 @@ jobs:
 
       - name: Ingest checked-in fixture and build temporal KG
         run: |
-          uv run --no-sync python scripts/ci_ingest_smoke.py --report "$RUNNER_TEMP/ingest-report.json"
+          uv run --no-sync python scripts/ci_ingest_smoke.py --report "$RUNNER_TEMP/ingest-report.json" --bundle-dir "$RUNNER_TEMP/fixture-kb"
 
       - name: Show metadata-only summary
         run: cat "$RUNNER_TEMP/ingest-report.json"
@@ -55,3 +57,31 @@ jobs:
           path: ${{ runner.temp }}/ingest-report.json
           retention-days: 3
           if-no-files-found: error
+
+      - name: Upload fixture KB snapshot for restore test (NOT private)
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-fixture-kb
+          path: ${{ runner.temp }}/fixture-kb/
+          retention-days: 3
+          if-no-files-found: error
+
+  verify-restore:
+    name: Download snapshot and verify SQLite + SHA-256
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download fixture snapshot from previous job
+        uses: actions/download-artifact@v4
+        with:
+          name: offline-fixture-kb
+          path: ${{ runner.temp }}/restored-kb
+
+      - name: Verify hashes, article counts and SQLite integrity (no PIS)
+        run: python scripts/ci_artifact.py verify --bundle "$RUNNER_TEMP/restored-kb" --kind fixture
