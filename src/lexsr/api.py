@@ -13,15 +13,16 @@ from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from kl_core.providers.gemini import GeminiEmbedder, GeminiLLM
 from lexsr import bench, runstore
 from lexsr.arms import ARMS
 from lexsr.arms.base import ABLATION_SPEC, AblationConfig, RetrievalArm
-from lexsr.config import CORPUS_DIR, REPO_ROOT, gemini_api_key
+from lexsr.config import CORPUS_DIR, DATA_DIR, REPO_ROOT, gemini_api_key
 from lexsr.index import open_table
 from lexsr.kg import open_connection
+from lexsr.offline_search import CorpusUnavailable, OfflineSearchIndex
 
 app = FastAPI(title="srb-legal-rag", version="0.1")
 app.add_middleware(
@@ -61,6 +62,40 @@ def _arm_with(name: str, config: AblationConfig | None) -> RetrievalArm:
         return _arm(name)
     s = _shared()
     return ARMS[name](s["llm"], s["embedder"], s["table"], s["kg"], config=config)
+
+
+
+# Independent offline search: no Gemini key, LLM, LanceDB or PIS calls.
+@lru_cache(maxsize=1)
+def _offline_index() -> OfflineSearchIndex:
+    return OfflineSearchIndex(CORPUS_DIR / "chunks.jsonl", DATA_DIR / "search.sqlite")
+
+
+class OfflineSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=500)
+    law_slug: str | None = Field(default=None, max_length=120)
+    as_of: date | None = None
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+@app.get("/api/search/status")
+def offline_search_status() -> dict:
+    return _offline_index().status()
+
+
+@app.post("/api/search")
+def offline_search(req: OfflineSearchRequest) -> dict:
+    if not req.query.strip():
+        raise HTTPException(422, "empty search query")
+    try:
+        return _offline_index().search(
+            req.query.strip(), law_slug=req.law_slug or None,
+            as_of=req.as_of, limit=req.limit,
+        )
+    except CorpusUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 class Turn(BaseModel):
