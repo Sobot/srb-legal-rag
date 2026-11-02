@@ -313,6 +313,48 @@ export interface CorpusLaw {
   chunks: number;
 }
 
+
+export interface OfflineSearchRequest {
+  query: string;
+  law_slug: string | null;
+  as_of: string | null;
+  limit: number;
+}
+
+export interface OfflineSearchResult {
+  rank: number;
+  chunk_id: string;
+  law_slug: string;
+  source_title: string;
+  fragment: string;
+  text: string;
+  source_url: string;
+  version: string;
+  valid_from: string;
+  valid_to: string;
+  applies_from: string;
+  published: string;
+  repealed: boolean;
+  score: number;
+}
+
+export interface OfflineSearchResponse {
+  method: "bm25";
+  query: string;
+  normalized_query: string;
+  total_indexed_articles: number;
+  results: OfflineSearchResult[];
+  elapsed_ms: number;
+  note: string;
+}
+
+export interface OfflineSearchStatus {
+  corpus_available: boolean;
+  index_exists: boolean;
+  method: string;
+  requires_api_key: boolean;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -320,6 +362,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  offlineSearchStatus: () => request<OfflineSearchStatus>("/api/search/status"),
+  offlineSearch: (input: OfflineSearchRequest) =>
+    request<OfflineSearchResponse>("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
   arms: () => request<string[]>("/api/arms"),
   ablations: () => request<AblationSpec>("/api/ablations"),
   ask: (
