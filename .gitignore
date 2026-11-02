@@ -29,3 +29,6 @@ data/index/
 data/kg.sqlite
 data/corpus/chunks.jsonl
 data/corpus/references.jsonl
+
+# Regenerated local-only SQLite FTS5 search index (may contain statute text)
+data/search.sqlite
