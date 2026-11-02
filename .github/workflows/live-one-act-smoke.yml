@@ -1,0 +1,95 @@
+name: Live PIS single-act smoke test
+
+# No automatic run. PIS terms require prior express WRITTEN permission for
+# automated extraction, indexing or storage.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_live:
+        description: "Confirm: run one live PIS act (current Constitution only)"
+        type: boolean
+        required: true
+        default: false
+      confirm_written_consent:
+        description: "I have the PIS operator's prior express written authorization"
+        type: boolean
+        required: true
+        default: false
+      archive_private_snapshot:
+        description: "Archive KB text+SQLite (requires PRIVATE repository)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-pis-single-act
+  cancel-in-progress: false
+
+jobs:
+  live-one-act:
+    if: ${{ inputs.confirm_live == true && inputs.confirm_written_consent == true }}
+    name: Current Constitution only (4 PIS GETs maximum)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate archive access before contacting PIS
+        env:
+          WANT_ARCHIVE: ${{ inputs.archive_private_snapshot }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [[ "$WANT_ARCHIVE" == "true" && "$REPO_PRIVATE" != "true" ]]; then
+            echo "::error::The PIS KB cannot be archived in a public repository."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python and locked dependencies
+        run: |
+          uv python install 3.12
+          uv sync --locked --python 3.12 --extra dev
+
+      - name: Fetch and parse one current act (no references or embeddings)
+        env:
+          WANT_ARCHIVE: ${{ inputs.archive_private_snapshot }}
+          PIS_WRITTEN_CONSENT: "true"
+        run: |
+          if [[ "$WANT_ARCHIVE" == "true" ]]; then
+            uv run --no-sync python scripts/ci_live_one_act_smoke.py \
+              --report "$RUNNER_TEMP/live-one-act-report.json" \
+              --bundle-dir "$RUNNER_TEMP/private-kb"
+          else
+            uv run --no-sync python scripts/ci_live_one_act_smoke.py \
+              --report "$RUNNER_TEMP/live-one-act-report.json"
+          fi
+
+      - name: Show counts and citation metadata only
+        run: cat "$RUNNER_TEMP/live-one-act-report.json"
+
+      - name: Upload metadata-only report
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-one-act-smoke
+          path: ${{ runner.temp }}/live-one-act-report.json
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Archive authorized KB (PRIVATE repository only)
+        if: ${{ inputs.archive_private_snapshot && github.event.repository.private }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: authorized-private-kb
+          path: ${{ runner.temp }}/private-kb/
+          retention-days: 3
+          if-no-files-found: error
