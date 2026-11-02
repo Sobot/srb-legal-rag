@@ -1,0 +1,78 @@
+name: Offline Knowledge Base Explorer CI
+
+# Purely local source + checked-in fixture. No live PIS crawl, Gemini or AWS.
+on:
+  push:
+    branches:
+      - feature/offline-kb-explorer
+    paths:
+      - '.github/workflows/offline-explorer.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/ci_ingest_smoke.py'
+      - 'scripts/ci_artifact.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  explorer:
+    name: Backend tests + frontend build (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: |
+          uv python install 3.12
+          uv sync --locked --python 3.12 --extra dev
+
+      - name: Test parser, API, and offline FTS5 Search
+        env:
+          GEMINI_API_KEY: ""
+          ANTHROPIC_API_KEY: ""
+        run: |
+          uv run --no-sync python -m pytest -q \
+            tests/test_offline_search.py tests/test_api.py tests/test_parser.py
+
+      - name: Build isolated fixture KB without network
+        run: |
+          mkdir -p .local-kb/corpus
+          uv run --no-sync python scripts/ci_ingest_smoke.py \
+            --report .local-kb/fixture-report.json \
+            --bundle-dir .local-kb/fixture-snapshot
+          python scripts/ci_artifact.py verify \
+            --bundle .local-kb/fixture-snapshot --kind fixture
+          cp .local-kb/fixture-snapshot/chunks.jsonl .local-kb/corpus/
+          cp .local-kb/fixture-snapshot/manifest.json .local-kb/corpus/
+          cp .local-kb/fixture-snapshot/kg.sqlite .local-kb/kg.sqlite
+
+      - name: Search 298 articles in the fixture KB
+        env:
+          LEXSR_DATA_DIR: ${{ github.workspace }}/.local-kb
+          GEMINI_API_KEY: ""
+        run: |
+          uv run --no-sync python -c "from lexsr.offline_search import OfflineSearchIndex; from lexsr.config import CORPUS_DIR, DATA_DIR; s=OfflineSearchIndex(CORPUS_DIR/'chunks.jsonl',DATA_DIR/'search.sqlite'); r=s.search('prava obaveze odgovornosti'); assert r['total_indexed_articles']==298 and len(r['results'])>0; print('Offline BM25 smoke:', r['total_indexed_articles'], 'articles,',len(r['results']),'hits')"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: TypeScript and Vite production build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
