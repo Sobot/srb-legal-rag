@@ -1,18 +1,21 @@
 """One-act live PIS smoke test: current Constitution -> parser -> temporary KG.
 
 Intentionally hardcoded to a single current act (ustav-rs). No references,
-historical versions, embeddings, uploads of statute text or full ingest.
+historical versions, embeddings or full ingest. Snapshot export is explicitly
+blocked unless running in a private GitHub repository with written consent.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 from lexsr import index, ingest, kg, pis
+from ci_artifact import export_bundle
 
 LAW_SLUG = "ustav-rs"
 LAW_GUID = "f0d72ce3-dad2-4395-a2c1-c3d3226f22c2"
@@ -26,7 +29,11 @@ EXPECTED_REQUESTS = 4
 MAX_RESPONSE_BYTES = 3_000_000
 
 
-def run_once() -> dict:
+def run_once(bundle_dir: Path | None = None) -> dict:
+    if bundle_dir is not None:
+        if (os.environ.get("GITHUB_REPOSITORY_VISIBILITY") != "private" or
+                os.environ.get("PIS_WRITTEN_CONSENT") != "true"):
+            raise RuntimeError("Archiving live PIS text requires a private repository and written consent")
     original_request = pis._request
     calls: list[str] = []
 
@@ -120,6 +127,8 @@ def run_once() -> dict:
                     for chunk in chunks[:3]
                 ],
             }
+            if bundle_dir is not None:
+                export_bundle(corpus, graph_path, bundle_dir, kind="authorized-live")
 
     # The temporary HTML, chunks and graph are deleted before returning.
     return report
@@ -128,8 +137,9 @@ def run_once() -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--bundle-dir", type=Path, default=None)
     args = parser.parse_args()
-    report = run_once()
+    report = run_once(args.bundle_dir)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
