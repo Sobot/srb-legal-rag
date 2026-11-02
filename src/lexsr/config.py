@@ -14,7 +14,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = REPO_ROOT / "data"
+load_dotenv(REPO_ROOT / ".env")
+# Keep test corpora and generated indexes separate from tracked metadata.
+# Use LEXSR_DATA_DIR=$PWD/.local-kb for the offline Explorer.
+DATA_DIR = Path(os.environ.get("LEXSR_DATA_DIR", str(REPO_ROOT / "data"))).expanduser().resolve()
 CORPUS_DIR = DATA_DIR / "corpus"
 INDEX_DIR = DATA_DIR / "index"
 KG_PATH = DATA_DIR / "kg.sqlite"
@@ -23,7 +26,6 @@ EVALS_DIR = DATA_DIR / "evals"
 GOLDENS_DIR = REPO_ROOT / "goldens"  # committed: ground truth is source, not artifact
 CURRENT_GOLDEN = GOLDENS_DIR / "golden-situational-60.jsonl"  # the live benchmark golden — single source of truth
 
-load_dotenv(REPO_ROOT / ".env")
 
 
 def gemini_api_key() -> str:
