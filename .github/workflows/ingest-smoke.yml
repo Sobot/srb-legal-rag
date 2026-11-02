@@ -41,7 +41,7 @@ jobs:
           uv sync --locked --python 3.12 --extra dev
 
       - name: Run parser and ingest contract tests (offline)
-        run: uv run --no-sync python -m pytest -q tests/test_parser.py tests/test_ingest.py tests/test_kg.py
+        run: uv run --no-sync python -m pytest -q tests/test_parser.py tests/test_ingest.py tests/test_kg.py tests/test_ci_artifact_gates.py
 
       - name: Ingest checked-in fixture and build temporal KG
         run: |
