@@ -4,12 +4,13 @@ import Runs from "./components/Runs";
 import Dashboard from "./components/Dashboard";
 import Benchmark from "./components/Benchmark";
 import Corpus from "./components/Corpus";
+import Search from "./components/Search";
 
-const TABS = ["Chat", "Runs", "Benchmark", "Corpus", "Dashboard"] as const;
+const TABS = ["Search", "Chat", "Runs", "Benchmark", "Corpus", "Dashboard"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("Chat");
+  const [tab, setTab] = useState<Tab>("Search");
   return (
     <div className="mx-auto flex h-screen max-w-6xl flex-col px-4">
       <header className="flex items-center justify-between border-b border-slate-200 py-3">
@@ -34,6 +35,7 @@ export default function App() {
         </nav>
       </header>
       <main className="min-h-0 flex-1 py-4">
+        {tab === "Search" && <Search />}
         {tab === "Chat" && <Chat />}
         {tab === "Runs" && <Runs />}
         {tab === "Benchmark" && <Benchmark />}
