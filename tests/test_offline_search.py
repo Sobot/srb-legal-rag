@@ -103,7 +103,7 @@ def test_user_input_never_executes_raw_fts_syntax(tmp_path, unsafe_query):
 
 
 def test_fastapi_routes_do_not_require_gemini(monkeypatch, tmp_path):
-    idx = search_index(tmp_path, [chunk("179", "Послодавац може да откаже уговор.")])
+    idx = search_index(tmp_path, [chunk("179", "Послодавац може да уручи отказ уговора.")])
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setattr(api, "_offline_index", lambda: idx)
     client = TestClient(api.app)
