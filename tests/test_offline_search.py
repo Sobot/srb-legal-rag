@@ -53,7 +53,7 @@ def test_no_corpus_gives_helpful_error(tmp_path):
 
 def test_serbian_latin_to_cyrillic_and_article_provenance(tmp_path):
     index = search_index(tmp_path, [
-        chunk("179", "Послодавац може да откаже уговор о раду."),
+        chunk("179", "Послодавац може да уручи отказ уговора о раду."),
         chunk("42", "Запослени има право на плаћено одсуство."),
     ])
     result = index.search("otkaz ugovora", limit=5)
@@ -91,7 +91,7 @@ def test_index_rebuilds_when_source_changes(tmp_path):
 
 @pytest.mark.parametrize("unsafe_query", ['otkaz\" OR *', "()", "  "])
 def test_user_input_never_executes_raw_fts_syntax(tmp_path, unsafe_query):
-    idx = search_index(tmp_path, [chunk("179", "Послодавац може да откаже уговор.")])
+    idx = search_index(tmp_path, [chunk("179", "Послодавац може да уручи отказ уговора.")])
     if unsafe_query.strip() == "()":
         with pytest.raises(ValueError):
             idx.search(unsafe_query)
