@@ -32,3 +32,6 @@ data/corpus/references.jsonl
 
 # Regenerated local-only SQLite FTS5 search index (may contain statute text)
 data/search.sqlite
+
+# Local isolated legal KB fixtures, metadata and generated search index
+/.local-kb/
